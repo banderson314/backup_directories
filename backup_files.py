@@ -13,7 +13,9 @@ import shutil
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import scrolledtext
-from tkinter import messagebox
+from tkinter import ttk
+from collections import defaultdict
+
 
 def opening_dialog_box():
     """
@@ -135,16 +137,23 @@ def compare_and_copy_files_backup(source, backup):
 
 def compare_and_copy_files(source, backup):
     total_bytes_added = 0
-    files_transferred = 0
-    files_updated = 0
-    files_skipped = 0
-    files_failed = 0
+    files_transferred_count = 0
+    files_updated_count = 0
+    files_skipped_count = 0
+    files_failed_count = 0
+
+    files_transferred = []
+    files_updated = []
+    files_skipped = []
+    files_failed = []
+
     initial_directories = []
     created_directories = []
     for root, _, _ in os.walk(backup):
         relative_path = os.path.relpath(root, backup)
         initial_directories.append(relative_path)
 
+    count = 0
     for root, _, files in os.walk(source):
         # Create corresponding directory structure in the backup directory
         relative_path = os.path.relpath(root, source)
@@ -153,7 +162,9 @@ def compare_and_copy_files(source, backup):
         if relative_path not in initial_directories:
             created_directories.append(relative_path)
 
+        
         for file in files:
+            #file_relative_path = os.path.relpath()
             source_file = os.path.join(root, file)
             backup_file = os.path.join(backup_root, file)
             
@@ -161,12 +172,13 @@ def compare_and_copy_files(source, backup):
             if not os.path.exists(backup_file) or os.path.getmtime(source_file) > os.path.getmtime(backup_file):
                 try:
                     shutil.copy2(source_file, backup_file)
-                    files_transferred += 1
+                    files_transferred_count += 1
+                    files_transferred.append(os.path.join(relative_path, file))
                     total_bytes_added += os.path.getsize(source_file)
                 except Exception as e:
-                    files_failed += 1
+                    files_failed_count += 1
             else:
-                files_skipped += 1
+                files_skipped_count += 1
     
 
 
@@ -181,8 +193,6 @@ def compare_and_copy_files(source, backup):
     def on_close_window(event=None):
         exit()
 
-
-
     # Create summary dialog
     root = tk.Tk()
     root.withdraw()  # Hide main window
@@ -190,60 +200,121 @@ def compare_and_copy_files(source, backup):
     window.title("Transfer summary")
     window.protocol("WM_DELETE_WINDOW", on_close_window)
 
-    summary_message = (
-        f"Directories created: {len(created_directories)}\n"
-        f"Files transferred: {files_transferred}\n"
-        f"Files updated: {files_updated}\n"
-        f"Files skipped (up to date): {files_skipped}\n"
-        f"Files failed to transfer: {files_failed}\n"
-        f"Amount of GB added to backup: {total_bytes_added / (1024**3):.2f} GB"
-    )
-
-    def directory_details():
-        details_window = tk.Toplevel()
-        details_window.title("Details")
-        text = ""
-        for i in created_directories:
-            text += f"{i} \n"
-        label = tk.Label(details_window, text=text, justify=tk.LEFT)
-        label.pack()
 
     # Add text to the window
-    def create_text(row, text, details_box):
-        label = tk.Label(window, text=text)
-        label.grid(row=row, column=0, padx=5, pady=0, sticky="w")
+    row_count = 0
+    def create_report_row(summary_text, include_details_option, details_text):
+        """def details_window(text):
+            details_window = tk.Toplevel()
+            details_window.title("Details")
+            
+            text_area = scrolledtext.ScrolledText(details_window, wrap=tk.WORD, width=80, height=30)
+            text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+            
+            text_area.insert(tk.END, text)
+            text_area.config(state=tk.DISABLED)"""
+        
+        def populate_treeview(treeview, parent, tree):
+            for key, value in sorted(tree.items()):
+                node = treeview.insert(parent, 'end', text=key, open=False)
+                if isinstance(value, defaultdict):
+                    populate_treeview(treeview, node, value)
 
-    directory_label = tk.Label(window, text=f"Directories created: {len(created_directories)}")
-    directory_label.grid(row=0, column=0, padx=5, pady=0, sticky="w")
-    directory_details_button = tk.Button(window, text="Details", command=directory_details)
-    directory_details_button.grid(row=0, column=2, padx=5, pady=0, sticky="e")
+        def details_window(tree):
+            details_window = tk.Toplevel()
+            details_window.title("Details")
+            
+            treeview = ttk.Treeview(details_window)
+            treeview.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+            populate_treeview(treeview, '', tree)
+
+            def on_double_click(event):
+                item = treeview.selection()[0]
+                if treeview.item(item, 'open'):
+                    treeview.item(item, open=False)
+                else:
+                    treeview.item(item, open=True)
+
+            treeview.bind("<Double-1>", on_double_click)
+        
+        nonlocal row_count
+        label = tk.Label(window, text=summary_text)
+        label.grid(row=row_count, column=0, padx=10, pady=0, sticky="w")
+        if include_details_option:
+            details_button = tk.Button(window, text="Details", command=lambda: details_window(details_text))
+            details_button.grid(row=row_count, column=1, padx=10, pady=0, sticky="e")
+        row_count += 1
+
+
+    def create_details_text_backup(list):
+        details_text = ""
+        for i in list:
+            details_text += f"{i} \n"
+        return details_text
+    
+
+    def create_details_text_backup2(list_of_paths):
+        def build_tree(paths):
+            tree = lambda: defaultdict(tree)
+            root = tree()
+            for path in paths:
+                path = os.path.normpath(path)
+                parts = path.split(os.sep)
+                current = root
+                for part in parts:
+                    current = current[part]
+            return root
+
+        def format_tree(d, indent=0, is_top_level=True):
+            result = []
+            for key, value in sorted(d.items()):
+                if is_top_level:
+                    result.append(key)
+                else:
+                    result.append(' ' * indent + '├── ' + key)
+                if isinstance(value, defaultdict):
+                    result.extend(format_tree(value, indent + 4, is_top_level=False))
+            return result
+
+        tree = build_tree(list_of_paths)
+        formatted_tree = format_tree(tree)
+        return '\n'.join(formatted_tree)
+    
+    def create_details_text(list_of_paths):
+        def build_tree(paths):
+            tree = lambda: defaultdict(tree)
+            root = tree()
+            for path in paths:
+                path = os.path.normpath(path)
+                parts = path.split(os.sep)
+                current = root
+                for part in parts:
+                    current = current[part]
+            return root
+
+        tree = build_tree(list_of_paths)
+        return tree
+
+
+
+    directory_details_text = create_details_text(created_directories)
+    files_transferred_details_text = create_details_text(files_transferred)
+
+    create_report_row(f"Directories created: {len(created_directories)}", True, directory_details_text)
+    create_report_row(f"Files transferred: {files_transferred_count}\n", True, files_transferred_details_text)
+    create_report_row(f"Files updated: {files_updated_count}\n", True, "")
+    create_report_row(f"Files skipped (up to date): {files_skipped_count}\n", True, "")
+    create_report_row(f"Files failed to transfer: {files_failed_count}\n", True, "")
+    create_report_row(f"Amount of GB added to backup: {total_bytes_added / (1024**3):.2f} GB", False, "")
 
 
 
     ok_button = tk.Button(window, text="OK", command=on_ok_click)
-    ok_button.grid(row=6, column=0, columnspan=3, padx=5, pady=10, sticky="ew")
+    ok_button.grid(row=row_count, column=0, columnspan=3, padx=5, pady=10, sticky="ew")
 
     window.bind("<Escape>", on_close_window)
     window.bind("<Return>", on_ok_click)
-
-    # Function to show detailed file information
-    def show_file_details():
-        file_details = tk.Toplevel()
-        file_details.title("File Details")
-        text_area = scrolledtext.ScrolledText(file_details, width=80, height=20)
-        
-        for root_dir in created_directories:
-            text_area.insert(tk.END, f"\nDirectory: {root_dir}\n")
-            for root, _, files in os.walk(root_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    text_area.insert(tk.END, f"{file_path}\n")
-        
-        text_area.configure(state='disabled')
-        text_area.pack(expand=True, fill='both')
-
-        close_button = tk.Button(file_details, text="Close", command=file_details.destroy)
-        close_button.pack()
 
 
     root.mainloop()
