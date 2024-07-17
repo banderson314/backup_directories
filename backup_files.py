@@ -13,8 +13,8 @@ import shutil
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import scrolledtext
-from tkinter import ttk
 from collections import defaultdict
+import time
 
 
 def opening_dialog_box():
@@ -70,7 +70,7 @@ def opening_dialog_box():
     source_entry_var = tk.StringVar()
     backup_entry_var = tk.StringVar()
 
-    source_entry = create_label_entry_grid(0, 0, "Source directory: ", "", source_entry_var)
+    source_entry = create_label_entry_grid(0, 0, "Source folder: ", "", source_entry_var)
     source_button = tk.Button(window, text="Choose", command=lambda: user_select_directory(source_entry, source_entry_var))
     source_button.grid(row=0, column=2, padx=5, pady=0, sticky="e")
 
@@ -88,14 +88,12 @@ def opening_dialog_box():
 
 
 
-#opening_dialog_box()
-#print(f"Source directory: {source_directory}")
-#print(f"Backup directory: {backup_directory}")
+opening_dialog_box()
+print(f"Source directory: {source_directory}")
+print(f"Backup directory: {backup_directory}")
 
-source_directory = "C:/Users/bran314/Desktop/Delete - test files/Sodium-iodate-induced GA"
-backup_directory = "C:/Users/bran314/Desktop/Delete - test files/Backup 2 - Copy"
 
-# Checks to make sure directory imput is proper
+### Checks to make sure directory input is proper ###
 # Checks that user put in something for both directories
 if source_directory == "" or backup_directory == "":
     print("Directory not specified")
@@ -115,27 +113,19 @@ elif not os.path.exists(backup_directory):
     
 
 
-def compare_and_copy_files_backup(source, backup):
-    for root, _, files in os.walk(source):
-        # Create corresponding directory structure in the backup directory
-        relative_path = os.path.relpath(root, source)
-        backup_root = os.path.join(backup, relative_path)
-        os.makedirs(backup_root, exist_ok=True)
-        
-        for file in files:
-            source_file = os.path.join(root, file)
-            backup_file = os.path.join(backup_root, file)
-            
-            # Compare modification times and copy if necessary
-            if not os.path.exists(backup_file) or os.path.getmtime(source_file) > os.path.getmtime(backup_file):
-                try:
-                    shutil.copy2(source_file, backup_file)
-                    print(f'Transferred: {source_file} to {backup_file}')
-                except Exception as e:
-                    print(f'Error copying {source_file} to {backup_file}: {e}')
-
 
 def compare_and_copy_files(source, backup):
+    """
+    First compares the backup to the source, and if any files don't exist or are not as up to date in the backup,
+    it will copy (shutil.copy2) it over to the backup folder. It will then give a report for the user, with 
+    optional details.
+    Input:
+    Source and backup locations (str, written as paths)
+    Output:
+    None
+    """
+    start_time = time.time()
+
     total_bytes_added = 0
     files_transferred_count = 0
     files_updated_count = 0
@@ -153,7 +143,7 @@ def compare_and_copy_files(source, backup):
         relative_path = os.path.relpath(root, backup)
         initial_directories.append(relative_path)
 
-    count = 0
+
     for root, _, files in os.walk(source):
         # Create corresponding directory structure in the backup directory
         relative_path = os.path.relpath(root, source)
@@ -169,7 +159,7 @@ def compare_and_copy_files(source, backup):
             backup_file = os.path.join(backup_root, file)
             
             # Copy if doesn't exist or is not updated in backup location
-            if not os.path.exists(backup_file) or os.path.getmtime(source_file) > os.path.getmtime(backup_file):
+            if not os.path.exists(backup_file): # Copy if doesn't exit
                 try:
                     shutil.copy2(source_file, backup_file)
                     files_transferred_count += 1
@@ -177,14 +167,35 @@ def compare_and_copy_files(source, backup):
                     total_bytes_added += os.path.getsize(source_file)
                 except Exception as e:
                     files_failed_count += 1
-            else:
+                    files_failed.append(os.path.join(relative_path, file))
+            elif os.path.getmtime(source_file) > os.path.getmtime(backup_file): # Copy if not updated
+                try:
+                    backup_file_size = os.path.getsize(backup_file)
+                    source_file_size = os.path.getsize(source_file)
+                    change_in_file_size = source_file_size - backup_file_size
+                    shutil.copy2(source_file, backup_file)
+                    files_updated_count += 1
+                    files_updated.append(os.path.join(relative_path, file))
+                    total_bytes_added += change_in_file_size
+                except Exception as e:
+                    files_failed_count += 1
+                    files_failed.append(os.path.join(relative_path, file))
+            else:   # Don't copy if already there and updated
                 files_skipped_count += 1
+                files_skipped.append(os.path.join(relative_path, file))
     
+    # Calculating time took to transfer files
+    end_time = time.time()
+    elapsed_time_seconds = round(end_time - start_time)
+    if elapsed_time_seconds > 60:
+        elapsed_time_minutes = elapsed_time_seconds // 60
+        elapsed_time_remainder_seconds = elapsed_time_seconds % 60
+        elapsed_time_statement = f"Time to transfer: {elapsed_time_minutes} m {elapsed_time_remainder_seconds} s"
+    else:
+        elapsed_time_statement = f"Time to transfer: {elapsed_time_seconds} s"
+        
 
-
-
-
-    # Summary of data transfer
+    ### Summary of data transfer ###
     # When the user clicks "OK"
     def on_ok_click(event=None):
         exit()
@@ -204,7 +215,7 @@ def compare_and_copy_files(source, backup):
     # Add text to the window
     row_count = 0
     def create_report_row(summary_text, include_details_option, details_text):
-        """def details_window(text):
+        def details_window(text):
             details_window = tk.Toplevel()
             details_window.title("Details")
             
@@ -212,31 +223,8 @@ def compare_and_copy_files(source, backup):
             text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
             
             text_area.insert(tk.END, text)
-            text_area.config(state=tk.DISABLED)"""
+            text_area.config(state=tk.DISABLED)
         
-        def populate_treeview(treeview, parent, tree):
-            for key, value in sorted(tree.items()):
-                node = treeview.insert(parent, 'end', text=key, open=False)
-                if isinstance(value, defaultdict):
-                    populate_treeview(treeview, node, value)
-
-        def details_window(tree):
-            details_window = tk.Toplevel()
-            details_window.title("Details")
-            
-            treeview = ttk.Treeview(details_window)
-            treeview.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-
-            populate_treeview(treeview, '', tree)
-
-            def on_double_click(event):
-                item = treeview.selection()[0]
-                if treeview.item(item, 'open'):
-                    treeview.item(item, open=False)
-                else:
-                    treeview.item(item, open=True)
-
-            treeview.bind("<Double-1>", on_double_click)
         
         nonlocal row_count
         label = tk.Label(window, text=summary_text)
@@ -247,14 +235,15 @@ def compare_and_copy_files(source, backup):
         row_count += 1
 
 
-    def create_details_text_backup(list):
-        details_text = ""
-        for i in list:
-            details_text += f"{i} \n"
-        return details_text
-    
 
-    def create_details_text_backup2(list_of_paths):
+    def create_details_text(list_of_paths):
+        """
+        Converts a list of file paths into one text variable that is organized by directory tree
+        Input:
+        One list of strings that are file paths
+        Output:
+        One string with organized layout formatted to be used in details window of report dialog box
+        """
         def build_tree(paths):
             tree = lambda: defaultdict(tree)
             root = tree()
@@ -281,37 +270,24 @@ def compare_and_copy_files(source, backup):
         formatted_tree = format_tree(tree)
         return '\n'.join(formatted_tree)
     
-    def create_details_text(list_of_paths):
-        def build_tree(paths):
-            tree = lambda: defaultdict(tree)
-            root = tree()
-            for path in paths:
-                path = os.path.normpath(path)
-                parts = path.split(os.sep)
-                current = root
-                for part in parts:
-                    current = current[part]
-            return root
-
-        tree = build_tree(list_of_paths)
-        return tree
-
-
 
     directory_details_text = create_details_text(created_directories)
     files_transferred_details_text = create_details_text(files_transferred)
+    files_updated_details_text = create_details_text(files_updated)
+    files_skipped_details_text = create_details_text(files_skipped)
+    files_failed_details_text = create_details_text(files_failed)
 
     create_report_row(f"Directories created: {len(created_directories)}", True, directory_details_text)
     create_report_row(f"Files transferred: {files_transferred_count}\n", True, files_transferred_details_text)
-    create_report_row(f"Files updated: {files_updated_count}\n", True, "")
-    create_report_row(f"Files skipped (up to date): {files_skipped_count}\n", True, "")
-    create_report_row(f"Files failed to transfer: {files_failed_count}\n", True, "")
+    create_report_row(f"Files updated: {files_updated_count}\n", True, files_updated_details_text)
+    create_report_row(f"Files skipped (up to date): {files_skipped_count}\n", True, files_skipped_details_text)
+    create_report_row(f"Files failed to transfer: {files_failed_count}\n", True, files_failed_details_text)
     create_report_row(f"Amount of GB added to backup: {total_bytes_added / (1024**3):.2f} GB", False, "")
-
+    create_report_row(elapsed_time_statement, False, "")
 
 
     ok_button = tk.Button(window, text="OK", command=on_ok_click)
-    ok_button.grid(row=row_count, column=0, columnspan=3, padx=5, pady=10, sticky="ew")
+    ok_button.grid(row=row_count, column=1, columnspan=1, padx=5, pady=10, sticky="ew")
 
     window.bind("<Escape>", on_close_window)
     window.bind("<Return>", on_ok_click)
