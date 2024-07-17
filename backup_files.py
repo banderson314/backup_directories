@@ -17,20 +17,14 @@ from collections import defaultdict
 import time
 
 
-def opening_dialog_box():
+def user_input_directory_locations():
     """
     Function in which the user defines the folder to copy and the backup location
-    
-    Input parameters: 
+    Input: 
     None
-    
-    Returns: 
-    None, but does define global variables:
-    source_directory (str), backup_directory (str)
-
-    Dialog box uses a grid system with 3 rows and 3 columns
+    Output: 
+    Does not return, but does define two global variables: source_directory (str), backup_directory (str)
     """
-
     # When the user clicks "OK"
     def on_ok_click(event=None):
         global source_directory, backup_directory
@@ -44,21 +38,29 @@ def opening_dialog_box():
         exit()
 
     # Function to create a label and an entry field in a grid
-    def create_label_entry_grid(row, column, text, default_value, entry_var):
-        label = tk.Label(window, text=text)
-        label.grid(row=row, column=column, padx=5, pady=0, sticky="w")
+    row_count = 0
+    def create_entry_row(text, default_value, entry_var):
+        nonlocal row_count
 
+        # Create the label (column 0):
+        label = tk.Label(window, text=text)
+        label.grid(row=row_count, column=0, padx=5, pady=0, sticky="w")
+
+        # Create the entry box for user to type in directory (column 1):
         entry_var.set(default_value)
         entry = tk.Entry(window, textvariable=entry_var, width=40)  # Initial width set to 40
-        entry.grid(row=row, column=column + 1, padx=5, pady=0, sticky="ew")
+        entry.grid(row=row_count, column=1, padx=5, pady=0, sticky="ew")
 
+        # Create the "Choose" button to allow user to select directory from GUI (column 2):
+        def choose_directory_button(entry_widget):
+            directory = filedialog.askdirectory()
+            entry_var.set(directory)  # Update entry variable
+            entry_widget.configure(width=len(directory))  # Adjusts width based on directory length
+        button = tk.Button(window, text="Choose", command=lambda: choose_directory_button(entry))
+        button.grid(row=row_count, column=2, padx=5, pady=0, sticky="e")
+
+        row_count += 1
         return entry  # Return the entry widget for further use if needed
-
-    # Function to let the user select a directory
-    def user_select_directory(entry_widget, entry_var):
-        directory = filedialog.askdirectory()
-        entry_var.set(directory)  # Update entry variable
-        entry_widget.configure(width=len(directory))  # Adjust width based on directory length
 
     # Initial set up of window
     root = tk.Tk()
@@ -70,48 +72,50 @@ def opening_dialog_box():
     source_entry_var = tk.StringVar()
     backup_entry_var = tk.StringVar()
 
-    source_entry = create_label_entry_grid(0, 0, "Source folder: ", "", source_entry_var)
-    source_button = tk.Button(window, text="Choose", command=lambda: user_select_directory(source_entry, source_entry_var))
-    source_button.grid(row=0, column=2, padx=5, pady=0, sticky="e")
-
-    backup_entry = create_label_entry_grid(1, 0, "Backup folder: ", "", backup_entry_var)
-    backup_button = tk.Button(window, text="Choose", command=lambda: user_select_directory(backup_entry, backup_entry_var))
-    backup_button.grid(row=1, column=2, padx=5, pady=0, sticky="e")
-
+    create_entry_row("Source folder: ", "", source_entry_var)
+    create_entry_row("Backup folder: ", "", backup_entry_var)
+    
     ok_button = tk.Button(window, text="OK", command=on_ok_click)
-    ok_button.grid(row=2, column=0, columnspan=3, padx=5, pady=10, sticky="ew")
+    ok_button.grid(row=row_count, column=0, columnspan=3, padx=5, pady=10, sticky="ew")
 
     window.bind("<Escape>", on_close_window)
     window.bind("<Return>", on_ok_click)
 
     root.mainloop()
 
+user_input_directory_locations()
+#print(f"Source directory: {source_directory}")
+#print(f"Backup directory: {backup_directory}")
 
+# Checks to make sure directory input is proper
+def check_user_input(source_directory, backup_directory):
+    """
+    Checks to make sure directories given by user are valid
+    Input:
+    Source and backup locations (str, written as paths)
+    Output:
+    None. Will terminate program with printed message if user input is not valid
+    """
+    # Checks that user put in something for both directories
+    if source_directory == "" or backup_directory == "":
+        print("Directory not specified")
+        exit()
 
-opening_dialog_box()
-print(f"Source directory: {source_directory}")
-print(f"Backup directory: {backup_directory}")
+    # Checks that directories aren't contained within one another
+    common_path = os.path.commonpath([source_directory, backup_directory])
+    if common_path == os.path.normpath(source_directory) or common_path == os.path.normpath(backup_directory):
+        print("Directories cannot be located within each other")
+        exit()
 
-
-### Checks to make sure directory input is proper ###
-# Checks that user put in something for both directories
-if source_directory == "" or backup_directory == "":
-    print("Directory not specified")
-    exit()
-# Checks that directories aren't contained within one another
-common_path = os.path.commonpath([source_directory, backup_directory])
-if common_path == os.path.normpath(source_directory) or common_path == os.path.normpath(backup_directory):
-    print("Directories cannot be located within each other")
-    exit()
-# Checks that directories actually exist
-if not os.path.exists(source_directory):
-    print(f"Source directory '{source_directory}' does not exist.")
-    exit()    
-elif not os.path.exists(backup_directory):
-    print(f"Backup directory '{backup_directory}' does not exist.")
-    exit()
+    # Checks that directories actually exist
+    if not os.path.exists(source_directory):
+        print(f"Source directory '{source_directory}' does not exist.")
+        exit()    
+    elif not os.path.exists(backup_directory):
+        print(f"Backup directory '{backup_directory}' does not exist.")
+        exit()
     
-
+check_user_input(source_directory, backup_directory)
 
 
 def compare_and_copy_files(source, backup):
@@ -122,66 +126,59 @@ def compare_and_copy_files(source, backup):
     Input:
     Source and backup locations (str, written as paths)
     Output:
-    None
+    Dictionary with report information
     """
+    # Initiating variables for reporting purposes
     start_time = time.time()
-
     total_bytes_added = 0
-    files_transferred_count = 0
-    files_updated_count = 0
-    files_skipped_count = 0
-    files_failed_count = 0
-
     files_transferred = []
     files_updated = []
     files_skipped = []
     files_failed = []
-
     initial_directories = []
     created_directories = []
+
+    # Making list of directories in backup before transfer
     for root, _, _ in os.walk(backup):
         relative_path = os.path.relpath(root, backup)
         initial_directories.append(relative_path)
 
-
+    # Copying files from source to backup
     for root, _, files in os.walk(source):
-        # Create corresponding directory structure in the backup directory
+        # Create corresponding directory structure in backup
         relative_path = os.path.relpath(root, source)
         backup_root = os.path.join(backup, relative_path)
         os.makedirs(backup_root, exist_ok=True)
         if relative_path not in initial_directories:
             created_directories.append(relative_path)
 
-        
         for file in files:
-            #file_relative_path = os.path.relpath()
             source_file = os.path.join(root, file)
             backup_file = os.path.join(backup_root, file)
             
-            # Copy if doesn't exist or is not updated in backup location
-            if not os.path.exists(backup_file): # Copy if doesn't exit
+            # Copy over if doesn't exit in backup
+            if not os.path.exists(backup_file):
                 try:
                     shutil.copy2(source_file, backup_file)
-                    files_transferred_count += 1
                     files_transferred.append(os.path.join(relative_path, file))
                     total_bytes_added += os.path.getsize(source_file)
                 except Exception as e:
-                    files_failed_count += 1
                     files_failed.append(os.path.join(relative_path, file))
-            elif os.path.getmtime(source_file) > os.path.getmtime(backup_file): # Copy if not updated
+
+            # Copy if backup file isn't updated
+            elif os.path.getmtime(source_file) > os.path.getmtime(backup_file):
                 try:
                     backup_file_size = os.path.getsize(backup_file)
                     source_file_size = os.path.getsize(source_file)
                     change_in_file_size = source_file_size - backup_file_size
                     shutil.copy2(source_file, backup_file)
-                    files_updated_count += 1
                     files_updated.append(os.path.join(relative_path, file))
                     total_bytes_added += change_in_file_size
                 except Exception as e:
-                    files_failed_count += 1
                     files_failed.append(os.path.join(relative_path, file))
-            else:   # Don't copy if already there and updated
-                files_skipped_count += 1
+            
+            # Don't bopy if backup already exists and updated
+            else:
                 files_skipped.append(os.path.join(relative_path, file))
     
     # Calculating time took to transfer files
@@ -193,9 +190,39 @@ def compare_and_copy_files(source, backup):
         elapsed_time_statement = f"Time to transfer: {elapsed_time_minutes} m {elapsed_time_remainder_seconds} s"
     else:
         elapsed_time_statement = f"Time to transfer: {elapsed_time_seconds} s"
+
+    # Creating dictionary of information to include in final report
+    report_dict = {
+        "created_directories": created_directories,
+        "files_transferred": files_transferred,
+        "files_updated": files_updated,
+        "files_skipped": files_skipped,
+        "files_failed": files_failed,
+        "total_bytes_added": total_bytes_added,
+        "elapsed_time_statement": elapsed_time_statement
+    }
+    return report_dict
         
 
-    ### Summary of data transfer ###
+report_dict = compare_and_copy_files(source_directory, backup_directory)
+
+def create_and_display_transfer_report(report_dict):
+    """
+    Creates a dialog box that reports the files that were transferred, updated, etc.
+    Input:
+    Dictionary that contains informtation to report
+    Output:
+    None
+    """
+    # Unpacking report_dict
+    created_directories = report_dict["created_directories"]
+    files_transferred = report_dict["files_transferred"]
+    files_updated = report_dict["files_updated"]
+    files_skipped = report_dict["files_skipped"]
+    files_failed = report_dict["files_failed"]
+    total_bytes_added = report_dict["total_bytes_added"]
+    elapsed_time_statement = report_dict["elapsed_time_statement"]
+    
     # When the user clicks "OK"
     def on_ok_click(event=None):
         exit()
@@ -211,20 +238,18 @@ def compare_and_copy_files(source, backup):
     window.title("Transfer summary")
     window.protocol("WM_DELETE_WINDOW", on_close_window)
 
-
     # Add text to the window
     row_count = 0
     def create_report_row(summary_text, include_details_option, details_text):
         def details_window(text):
             details_window = tk.Toplevel()
-            details_window.title("Details")
+            details_window.title(summary_text.split(":")[0])
             
             text_area = scrolledtext.ScrolledText(details_window, wrap=tk.WORD, width=80, height=30)
             text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
             
             text_area.insert(tk.END, text)
             text_area.config(state=tk.DISABLED)
-        
         
         nonlocal row_count
         label = tk.Label(window, text=summary_text)
@@ -233,8 +258,6 @@ def compare_and_copy_files(source, backup):
             details_button = tk.Button(window, text="Details", command=lambda: details_window(details_text))
             details_button.grid(row=row_count, column=1, padx=10, pady=0, sticky="e")
         row_count += 1
-
-
 
     def create_details_text(list_of_paths):
         """
@@ -278,12 +301,19 @@ def compare_and_copy_files(source, backup):
     files_failed_details_text = create_details_text(files_failed)
 
     create_report_row(f"Directories created: {len(created_directories)}", True, directory_details_text)
-    create_report_row(f"Files transferred: {files_transferred_count}\n", True, files_transferred_details_text)
-    create_report_row(f"Files updated: {files_updated_count}\n", True, files_updated_details_text)
-    create_report_row(f"Files skipped (up to date): {files_skipped_count}\n", True, files_skipped_details_text)
-    create_report_row(f"Files failed to transfer: {files_failed_count}\n", True, files_failed_details_text)
+    create_report_row(f"Files transferred: {len(files_transferred)}\n", True, files_transferred_details_text)
+    create_report_row(f"Files updated: {len(files_updated)}\n", True, files_updated_details_text)
+    create_report_row(f"Files skipped (up to date): {len(files_skipped)}\n", True, files_skipped_details_text)
+    create_report_row(f"Files failed to transfer: {len(files_failed)}\n", True, files_failed_details_text)
     create_report_row(f"Amount of GB added to backup: {total_bytes_added / (1024**3):.2f} GB", False, "")
     create_report_row(elapsed_time_statement, False, "")
+
+    label = tk.Label(window, text=f"Source directory: {source_directory}")
+    label.grid(row=row_count, column=0, columnspan=2, padx=10, pady=0, sticky="w")
+    row_count += 1
+    label = tk.Label(window, text=f"Backup directory: {backup_directory}")
+    label.grid(row=row_count, column=0, columnspan=2, padx=10, pady=0, sticky="w")
+    row_count += 1
 
 
     ok_button = tk.Button(window, text="OK", command=on_ok_click)
@@ -296,4 +326,5 @@ def compare_and_copy_files(source, backup):
     root.mainloop()
 
 
-compare_and_copy_files(source_directory, backup_directory)
+create_and_display_transfer_report(report_dict)
+
