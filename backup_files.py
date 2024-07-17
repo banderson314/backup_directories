@@ -102,10 +102,13 @@ def check_user_input(source_directory, backup_directory):
         exit()
 
     # Checks that directories aren't contained within one another
-    common_path = os.path.commonpath([source_directory, backup_directory])
-    if common_path == os.path.normpath(source_directory) or common_path == os.path.normpath(backup_directory):
-        print("Directories cannot be located within each other")
-        exit()
+    try:
+        common_path = os.path.commonpath([source_directory, backup_directory])
+        if common_path == os.path.normpath(source_directory) or common_path == os.path.normpath(backup_directory):
+            print("Directories cannot be located within each other")
+            exit()
+    except ValueError as e:
+        pass
 
     # Checks that directories actually exist
     if not os.path.exists(source_directory):
