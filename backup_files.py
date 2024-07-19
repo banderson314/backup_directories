@@ -84,8 +84,8 @@ def user_input_directory_locations():
     root.mainloop()
 
 user_input_directory_locations()
-#print(f"Source directory: {source_directory}")
-#print(f"Backup directory: {backup_directory}")
+print(f"Source directory: {source_directory}")
+print(f"Backup directory: {backup_directory}")
 
 # Checks to make sure directory input is proper
 def check_user_input(source_directory, backup_directory):
@@ -138,13 +138,13 @@ def compare_and_copy_files(source, backup):
     files_updated = []
     files_skipped = []
     files_failed = []
-    initial_directories = []
-    created_directories = []
+    # Uncomment to get report on directory creation initial_directories = []
+    # Uncomment to get report on directory creation created_directories = []
 
     # Making list of directories in backup before transfer
-    for root, _, _ in os.walk(backup):
-        relative_path = os.path.relpath(root, backup)
-        initial_directories.append(relative_path)
+    # Uncomment to get report on directory creation for root, _, _ in os.walk(backup):
+    # Uncomment to get report on directory creation     relative_path = os.path.relpath(root, backup)
+    # Uncomment to get report on directory creation     initial_directories.append(relative_path)
 
     # Copying files from source to backup
     for root, _, files in os.walk(source):
@@ -152,8 +152,8 @@ def compare_and_copy_files(source, backup):
         relative_path = os.path.relpath(root, source)
         backup_root = os.path.join(backup, relative_path)
         os.makedirs(backup_root, exist_ok=True)
-        if relative_path not in initial_directories:
-            created_directories.append(relative_path)
+        # Uncomment to get report on directory creation if relative_path not in initial_directories:
+        # Uncomment to get report on directory creation     created_directories.append(relative_path)
 
         for file in files:
             source_file = os.path.join(root, file)
@@ -183,6 +183,15 @@ def compare_and_copy_files(source, backup):
             # Don't bopy if backup already exists and updated
             else:
                 files_skipped.append(os.path.join(relative_path, file))
+
+
+            # Report on progress
+            files_copied = len(files_transferred) + len(files_updated)
+            files_reviewed = files_copied + len(files_skipped) + len(files_failed)
+            progress_update = f"Files copied: {files_copied}. Total files reviewed: {files_reviewed}."
+            print(progress_update, end='\r', flush=True)
+    
+    print(progress_update)
     
     # Calculating time took to transfer files
     end_time = time.time()
@@ -196,7 +205,7 @@ def compare_and_copy_files(source, backup):
 
     # Creating dictionary of information to include in final report
     report_dict = {
-        "created_directories": created_directories,
+        # Uncomment to get report on directory creation "created_directories": created_directories,
         "files_transferred": files_transferred,
         "files_updated": files_updated,
         "files_skipped": files_skipped,
@@ -218,7 +227,7 @@ def create_and_display_transfer_report(report_dict):
     None
     """
     # Unpacking report_dict
-    created_directories = report_dict["created_directories"]
+    # Uncomment to get report on directory creation created_directories = report_dict["created_directories"]
     files_transferred = report_dict["files_transferred"]
     files_updated = report_dict["files_updated"]
     files_skipped = report_dict["files_skipped"]
@@ -297,13 +306,13 @@ def create_and_display_transfer_report(report_dict):
         return '\n'.join(formatted_tree)
     
 
-    directory_details_text = create_details_text(created_directories)
+    # Uncomment to get report on directory creation directory_details_text = create_details_text(created_directories)
     files_transferred_details_text = create_details_text(files_transferred)
     files_updated_details_text = create_details_text(files_updated)
     files_skipped_details_text = create_details_text(files_skipped)
     files_failed_details_text = create_details_text(files_failed)
 
-    create_report_row(f"Directories created: {len(created_directories)}", True, directory_details_text)
+    # Uncomment to get report on directory creation create_report_row(f"Directories created: {len(created_directories)}", True, directory_details_text)
     create_report_row(f"Files transferred: {len(files_transferred)}\n", True, files_transferred_details_text)
     create_report_row(f"Files updated: {len(files_updated)}\n", True, files_updated_details_text)
     create_report_row(f"Files skipped (up to date): {len(files_skipped)}\n", True, files_skipped_details_text)
